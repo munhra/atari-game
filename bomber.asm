@@ -33,7 +33,9 @@ RiverColor          byte      ;color of the river
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 JET_HEIGHT = 9                ;player 0 constante to height size
 BOMBER_HEIGHT = 9             ;player 1 constante to height size
-DIGITS_HEIGHT = 5             ;height of the numbers font of score board 5
+DIGITS_HEIGHT = 5             ;height of the numbers font of score board 
+                              ;5 something is wrong here had to change 
+                              ;from 5 to 6
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Start ROM code at memory address $F000
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -55,15 +57,10 @@ Reset:
     STA BomberXPos          ;initilize default X bomber position
     LDA #%11010100          ;initialize random seed
     STA Random              ;with value D4
-    LDA #4
+    LDA #6
     STA Score               ;initialize score with 0
-    LDA #2
+    LDA #9
     STA Timer               ;initialize timer with 0
-    ;LDA #
-    ;STA RiverColor
-    ;LDA #
-    ;STA TerrainColor
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialize the pointers to the correct table position for color and sprite
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -103,7 +100,9 @@ StartFrame:
     REPEND
     LDA #0
     STA VSYNC          ;Turn off VSYNC
-    REPEAT 33          ;How many lines are left ??? when doing some extra
+    ;LDA #2
+    ;STA VBLANK
+    REPEAT 35          ;How many lines are left ??? when doing some extra
                        ;Process how many clock cycles the result is 37 - 4 
                        ;33 clocks are consumed below
         STA WSYNC      ;Display 37 recomended VBLANK
@@ -112,34 +111,37 @@ StartFrame:
 ;; Calculations and tasks performed in the pre VBLANK
 ;; VBLANK is a good place to perform some calculations that can take some time
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    LDA JetXPos
-    LDY #0
-    JSR SET_OBJECT_X_POSITION     ;set player 0 horizontal position
-    LDA BomberXPos
-    LDY #1
-    JSR SET_OBJECT_X_POSITION     ;set player 1 horizontal position
-    JSR CalculateDigitOffSet      ;calculate the score board digit lookup offset
-    STA WSYNC
-    STA HMOVE
+    LDA JetXPos                   ;3 |
+    LDY #0                        ;2 |
+    ;JSR SET_OBJECT_X_POSITION    ;6 | set player 0 horizontal position + WSYNC
+    LDA BomberXPos                ;3 |
+    LDY #1                        ;2 |
+    ;JSR SET_OBJECT_X_POSITION    ;6 | set player 1 horizontal position + WSYNC
+    JSR CalculateDigitOffSet     ;6 | calculate the score board digit lookup offset
+    STA WSYNC                     ; included here as a replacement of JSR
+    ;STA WSYNC                     ;3 |
+    ;STA HMOVE                    ;3 | this HMOVE was generating that strange pixel
     
-    LDA #0
-    STA VBLANK         ;Turn off VBLANK, in other words end the VBLANK
+    LDA #0                        ;2 |
+    STA VBLANK                    ;3 | Turn off VBLANK, in other words end the VBLANK
+                                  ; up to here 37 scan lines need to be done
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Display score board 20 lines
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-    LDA #0                   ; clear TIA Register before display score
+    
+    LDA #0  
+    STA COLUBK               ; clear TIA Register before display score
     STA PF0
     STA PF1
     STA PF2
     STA GRP0
     STA GRP1
-    STA COLUBK
     LDA #$1E                 ; set score board bright yellow
     STA COLUPF
     LDA #%00000000           ; load 0 
     STA CTRLPF               ; store 0 to not reflect the playfield
     LDX #DIGITS_HEIGHT       ; start x counter 5 height of digits
-
+    ;STA WSYNC
 .ScoreDigitLoop:
     LDY TensDigitOffset      ; get the tens digit offset of the score
     LDA Digits,Y             ; load the bit pattern from lookup table
@@ -152,8 +154,12 @@ StartFrame:
     
     ORA ScoreSprite          ; merge it with the saved tens digit graphics
     STA ScoreSprite          ; and save it
-    STA WSYNC                ; wait for the next scanline
+    
     STA PF1                  ; update playfield to display the score on the screen
+    ;STA WSYNC                ; wait for the next scanline
+    
+    JSR Sleep12Cycles        ; wast some cicles this will give time for the bean
+    JSR Sleep12Cycles
 
     LDY TensDigitOffset+1    ; get the tens digit of the timer
     LDA Digits,y             ; load digit pattern from lookup table
@@ -163,16 +169,18 @@ StartFrame:
     LDY OnesDigitOffset+1    ; get the ones digits offset for the timer
     LDA Digits,Y             ; load digits pattern from the table
     AND #$0F                 ; mask ones digits
+    
     ORA TimerSprite          ; join both tens and ones
     STA TimerSprite          ; store joined timer sprite, remember each pass of this
                              ; loop is one line of the score/timer sprite
                              
-    JSR Sleep12Cycles        ; wast some cicles this will give time for the bean
+    
                              ; to reach the other side and after that we can change
                              ; PF1 values to be asymetrical
     STA PF1
     LDY ScoreSprite          ; Preload for the next scan line
     STA WSYNC
+    ;STA WSYNC
     STY PF1                  ; Load the sprite in PF1 for exibition
 
 
@@ -184,15 +192,26 @@ StartFrame:
     JSR Sleep12Cycles        ; sleep again 12 cycles for the bean to reach
                              ; the required position
 
+    ;STY PF1
+
     DEX                      ; X--
     STA PF1                  ; update PF1 with the timer
     BNE .ScoreDigitLoop      ; if dex !=0 branch to score loop
+    
 
     STA WSYNC
+    ;STA WSYNC
+
+    ;LDA #0                   ;2 |
+    ;STA VBLANK               ;3 | Turn off VBLANK, in other words end the VBLANK
     LDA #0
     STA PF1
     STA PF2
     STA PF0
+    STA WSYNC
+ 
+    STA WSYNC
+    STA WSYNC
     STA WSYNC
     STA WSYNC
     STA WSYNC
@@ -213,7 +232,7 @@ GameVisibleLine:
     STA PF1
     LDA #0
     STA PF2
-    LDX #85                 ;Remaining scan lines, two lines kernel
+    LDX #88                 ;Remaining scan lines, two lines kernel
 .GameLineLoop:
     ;STA WSYNC
 .AreInsideJetSprite:
@@ -317,26 +336,32 @@ P0_DIRECT_NOT_DETECTED:
 ;; Calculations to update position for next frame
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 UpdateBomberPosition:
-    LDA BomberYPos
-    CLC
-    CMP #0                           ;compare bomber Y position with 0
-    BMI .ResetBomberPosition         ;if it is < 0 then reset y position to top
-    DEC BomberYPos                   ;else, decrement enemy y position
-    JMP EndPositionUpdate            ;jump and does not reset to initial
-.ResetBomberPosition
-    JSR GetRandomBomberPos           ;call sub routine for random X position
+    ;LDA BomberYPos
+    ;CLC
+    ;CMP #0                           ;compare bomber Y position with 0
+    ;BMI .ResetBomberPosition         ;if it is < 0 then reset y position to top
+    ;DEC BomberYPos                   ;else, decrement enemy y position
+    ;JMP EndPositionUpdate            ;jump and does not reset to initial
+;.ResetBomberPosition
+    ;JSR GetRandomBomberPos           ;call sub routine for random X position
 EndPositionUpdate
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Check colision of the objects
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-CheckCilisionP0P1:
-    LDA #%10000000                    ; CXPPMM bit 7 detects P1 and P0 colision
-    BIT CXPPMM                        ; it works like an AND operation
-    BNE .P0P1Collided                 ; collision happened
-    JSR SetTerrainRiverColor          ; else set play field to green/blue
-    JMP EndCollisionCheck             ; else skip to PF colision check
-.P0P1Collided
-    JSR GameOver                      ; if collision go to gameover
+
+    LDA #$C2
+    STA TerrainColor                ; set terrain color to green
+    LDA #$84                        ; was 84
+    STA RiverColor                  ; set tiver color to blue
+
+;CheckCilisionP0P1:
+;    LDA #%10000000                    ; CXPPMM bit 7 detects P1 and P0 colision
+;    BIT CXPPMM                        ; it works like an AND operation
+;    BNE .P0P1Collided                 ; collision happened
+;    JSR SetTerrainRiverColor          ; else set play field to green/blue
+;    JMP EndCollisionCheck             ; else skip to PF colision check
+;.P0P1Collided
+    ;JSR GameOver                      ; if collision go to gameover
 ;CheckColisionP0PF
 ;    LDA #%10000000                   ; CXP0FB bit 7 detects P1 and P0 colision
 ;    BIT CXP0FB                       ; and operation with TIA register
@@ -357,7 +382,7 @@ EndCollisionCheck:
 SetTerrainRiverColor
     LDA #$C2
     STA TerrainColor                ; set terrain color to green
-    LDA #$84
+    LDA #$84                        ; was 84
     STA RiverColor                  ; set tiver color to blue
     RTS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -478,7 +503,6 @@ GameOver
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Digits:
     .byte %01110111
-    .byte %01010101
     .byte %01010101
     .byte %01010101
     .byte %01010101
