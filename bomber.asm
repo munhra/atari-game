@@ -43,6 +43,7 @@ DIGITS_HEIGHT = 5             ;height of the numbers font of score board
     org $F000
 
 Reset:
+    JSR FillRAMWithRandom   ;just an exercise
     CLEAN_START             ;call macro to reset memory and registers
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialize RAM variables and TIA registers
@@ -111,13 +112,13 @@ StartFrame:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     LDA JetXPos                   ;3 |
     LDY #0                        ;2 |
-    JSR SET_OBJECT_X_POSITION    ;6 | set player 0 horizontal position + WSYNC
+    JSR SET_OBJECT_X_POSITION     ;6 | set player 0 horizontal position + WSYNC
     LDA BomberXPos                ;3 |
     LDY #1                        ;2 |
-    JSR SET_OBJECT_X_POSITION    ;6 | set player 1 horizontal position + WSYNC
-    JSR CalculateDigitOffSet     ;6 | calculate the score board digit lookup offset
-    STA WSYNC                     ; included here as a replacement of JSR
-    STA HMOVE                    ;3 | this HMOVE was generating that strange pixel
+    JSR SET_OBJECT_X_POSITION     ;6 | set player 1 horizontal position + WSYNC
+    JSR CalculateDigitOffSet      ;6 | calculate the score board digit lookup offset
+    STA WSYNC                     ;    included here as a replacement of JSR
+    STA HMOVE                     ;3 | this HMOVE was generating that strange pixel
     
     LDA #0                        ;2 |
     STA VBLANK                    ;3 | Turn off VBLANK, in other words end the VBLANK
@@ -491,6 +492,25 @@ GameOver
 ;; Rom look up tables, declare here sprites and other elements that will be
 ;; stored in tables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+FillRAMWithRandom
+    LDX #0
+.RandomLoop
+    ASL
+    EOR Random
+    ASL
+    EOR Random
+    ASL 
+    ASL
+    EOR Random
+    ASL
+    ROL Random
+    LSR
+    LSR
+    STA $80,X
+    INX
+    CPX #128
+    BCC .RandomLoop
+    RTS
 Digits:
     .byte %01110111
     .byte %01010101
