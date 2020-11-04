@@ -43,7 +43,7 @@ DIGITS_HEIGHT = 5             ;height of the numbers font of score board
     org $F000
 
 Reset:
-    JSR FillRAMWithRandom   ;just an exercise
+    ;JSR FillRAMWithRandom   ;just an exercise
     CLEAN_START             ;call macro to reset memory and registers
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialize RAM variables and TIA registers
@@ -58,9 +58,9 @@ Reset:
     STA BomberXPos          ;initilize default X bomber position
     LDA #%11010100          ;initialize random seed
     STA Random              ;with value D4
-    LDA #6
+    LDA #0
     STA Score               ;initialize score with 0
-    LDA #9
+    LDA #0
     STA Timer               ;initialize timer with 0
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Initialize the pointers to the correct table position for color and sprite
@@ -117,6 +117,7 @@ StartFrame:
     LDY #1                        ;2 |
     JSR SET_OBJECT_X_POSITION     ;6 | set player 1 horizontal position + WSYNC
     JSR CalculateDigitOffSet      ;6 | calculate the score board digit lookup offset
+    ;JSR CalculateDigitOffSetDecimal
     STA WSYNC                     ;    included here as a replacement of JSR
     STA HMOVE                     ;3 | this HMOVE was generating that strange pixel
     
@@ -285,6 +286,9 @@ CHECK_P0_UP:
     ;
     ; Up logic goes here
     ;
+    LDA JetYPos                      ; load JetYPos into A register
+    CMP #$4F                         ; compare with $4F upper limit
+    BEQ CHECK_P0_DOWN                ; if JetYPos == $4F not increment
     INC JetYPos
     LDA #0
     STA JetAnimationOffset
@@ -295,6 +299,9 @@ CHECK_P0_DOWN:
     ;
     ; Down logic goes here
     ;
+    LDA JetYPos
+    CMP #1
+    BEQ CHECK_P0_LEFT
     DEC JetYPos
     LDA #0
     STA JetAnimationOffset
@@ -306,6 +313,9 @@ CHECK_P0_LEFT:
     ; Left logic goes here
     ;
     ;DEC PLAYER0_X_POS
+    LDA JetXPos
+    CMP #$1F
+    BEQ CHECK_P0_RIGHT
     DEC JetXPos
     LDA JET_HEIGHT                    ; load animation offset for the turn frame
     STA JetAnimationOffset
@@ -317,6 +327,9 @@ CHECK_P0_RIGHT:
     ; Right logic goes here
     ;
     ;INC PLAYER0_X_POS
+    LDA JetXPos
+    CMP #$66
+    BEQ P0_DIRECT_NOT_DETECTED
     INC JetXPos
     LDA JET_HEIGHT                    ; load animation offset for the turn frame
     STA JetAnimationOffset
@@ -332,6 +345,27 @@ UpdateBomberPosition:
     DEC BomberYPos                   ;else, decrement enemy y position
     JMP EndPositionUpdate            ;jump and does not reset to initial
 .ResetBomberPosition
+
+.SetScoreValues                      ;lets use BCD mode to calculate score
+    SED                              ;enable processor decimal mode
+                                     ;to add values the following instructions 
+                                     ;are requried
+
+    LDA Score
+    CLC                              ;clear carry flag before add
+    ADC #1
+    STA Score
+
+    LDA Timer
+    CLC
+    ADC #1
+    STA Timer
+
+    CLD                              ;disable BCD mode
+    
+    ;INC Score                       ;increment player score as bomber passed
+    ;INC Timer                       ;not possible to use INC instruction
+                                     ;in decimal mode
     JSR GetRandomBomberPos           ;call sub routine for random X position
 EndPositionUpdate
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -360,6 +394,7 @@ CheckCilisionP0P1:
 ;.CollisionP0PF
 ;    JSR GameOver
 EndCollisionCheck:
+    ;INC Score
     STA CXCLR
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loop back to the frame loop
@@ -426,6 +461,42 @@ GetRandomBomberPos
     STA BomberYPos
     RTS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Subroutine to handle score board digits in decimal to be displayed on the 
+;; screen 
+;; Parameter Score, with value from 0 to 99
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+CalculateDigitOffSetDecimal
+    LDX #1                 ; This index will vary from 1 to 0, 1 is the score
+                           ; 0 is the timer
+.TIME_AND_SCORE_BOARD_OFFSET 
+    LDA Score,X            ; load score value from memory to acummulator register
+    LDY #0                 ; Load zero to register X, this will be the tens
+    CMP #10                ; If A < 10 there is no need for division jump
+                           ; to offset calculation, tens will be zero as
+                           ; X is 0, and A will have the ones value
+    BCC .DEFINE_OFFSET
+    SEC                    ; clear carry before subtraction
+.DIVISION_LOOP
+    SBC #10                ; divide by subtraction
+    INY                    ; increment each subtraction
+    CMP #10                ; check if A < 10 keep subtracting
+    BCS .DIVISION_LOOP
+.DEFINE_OFFSET
+    STA Temp               ; Store A value in temp variable
+    ASL                    ; N * 2
+    ASL                    ; N * 2 * 2
+    ADC Temp               ; N * 2 * 2 + N = 5 * N 
+    STA OnesDigitOffset,X  ; store in score offset position
+    TYA
+    STA Temp
+    ASL
+    ASL
+    ADC Temp
+    STA TensDigitOffset,X
+    DEX
+    BPL .TIME_AND_SCORE_BOARD_OFFSET ; branch again to calculate timer offset
+    RTS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Subroutine to handle score board digits to be displayed on the screen 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Convert the high and low nibbles of variable score and time
@@ -440,6 +511,7 @@ GetRandomBomberPos
 ;; by 16 and multiply by 5:
 ;; - we can use right shifts to perform division by 2
 ;; - for any number N. the value of (N/16) * 5 = (N/2/2) + (N/2/2/2/2)
+;; - for decimal aproach (N/10) * 5 = N/(2 * 5) * 5 = N/2
 ;;   it is required to divide it by 16 as it is the upper nibble
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 CalculateDigitOffSet
@@ -487,6 +559,7 @@ GameOver
                                 ; Game Over
     LDA #0
     STA ScoreSprite             ; zeroe score value
+    STA Score                   ; zeroe player score
     RTS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Rom look up tables, declare here sprites and other elements that will be
