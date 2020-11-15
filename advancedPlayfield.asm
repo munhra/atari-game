@@ -19,8 +19,16 @@ treeYPosition           byte
 treeXPosition           byte
 treeSpritePtr           word
 treeSpriteColorPtr      word
+curvePtr                word
+curveYPosition          byte
+curve1Ptr               word
+curve1YPosition         byte
 currentScanLine         byte
-temp1                   byte
+temp1                   
+PF0AUX                  byte
+PF1AUX                  byte
+PF2AUX                  byte
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Define constants
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -43,6 +51,12 @@ Start:
     
     LDA #10
     sta treeYPosition
+
+    LDA #174
+    sta curveYPosition
+
+    lda #156
+    sta curve1YPosition
 
     LDA #<Building                       ;load in register the lo-byte of the address of the 
                                          ;lookup table
@@ -78,6 +92,15 @@ Start:
     LDA #>TreeColor     
     STA treeSpriteColorPtr+1
 
+    lda #<Curve
+    sta curvePtr
+    lda #>Curve
+    sta curvePtr+1
+
+    lda #<Curve1
+    sta curve1Ptr
+    lda #>Curve1
+    sta curve1Ptr+1
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Start a new frame by turning on VBLANK and VSYNC
@@ -122,30 +145,64 @@ LoopVBlank:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Draw 192 visible scanlines (kernel)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	ldx #61		    ; counter for 192 visible scanlines 192/2 = 96
- 
-LoopVisible:
+	ldx #192		    ; counter for 192 visible scanlines 192/2 = 96
     LDA #$C2           
     STA COLUPF              ;Set background to blue
     LDA #$08                ;Set color for the playfield
     STA COLUBK
     LDA #%00000001
     STA CTRLPF              ;Reflect player field
-    LDA #$F0                ;Setting PF0 pattern
+    LDA #%11110000                ;Setting PF0 pattern
     STA PF0
-    LDA #$FC
+    LDA #%11111111
     STA PF1
-    LDA #0
-    STA PF2
+    dec curveYPosition
+    dec curve1YPosition
+    ;dec curveYPosition
+    ;dec curve1YPosition
+
+    lda curveYPosition
+
+
+
+
+
+LoopVisible:
+    ;LDA #%11111111
+    ;STA PF2
     ;sta WSYNC
-    jsr DrawHouseSprite     ; wsync
-    jsr DrawBuildingSprite  ; there is a problem here the second call erases the first
-    jsr DrawTreeSprite
+    ;jsr DrawHouseSprite     ; wsync
+    ;jsr DrawBuildingSprite  ; there is a problem here the second call erases the first
+    ;jsr DrawTreeSprite
+
+    TXA
+    SEC                                  ;Transfer X to A  
+    SBC curveYPosition  
+    CMP #18                               ;are we inside the sprite boundary
+    BCS .SkipDrawCurve                   ;if result < SpriteHeight call draw rountine
     
+    TAY                                 ;transfer value of register A to register Y
+                                        ;it is required to transfer as Y a index register
+                                        ;for memory addressing   
+    LDA (curvePtr),Y                   
+    STA PF2                            ;set graphics for the player 0
+.SkipDrawCurve
+
+    TXA
+    SEC                                  ;Transfer X to A  
+    SBC curve1YPosition  
+    CMP #18                               ;are we inside the sprite boundary
+    BCS .SkipDrawCurve1                   ;if result < SpriteHeight call draw rountine
+    
+    TAY                                 ;transfer value of register A to register Y
+                                        ;it is required to transfer as Y a index register
+                                        ;for memory addressing   
+    LDA (curve1Ptr),Y                   
+    STA PF1                            ;set graphics for the player 0
+.SkipDrawCurve1
     
 
-
-
+    sta WSYNC
 
     dex				 ; X--
 	bne LoopVisible  ; loop while X != 0
@@ -334,7 +391,44 @@ TreeColor
     .byte #$B4;
     .byte #$DE;
     .byte #$0E;
-
+Curve1
+    .byte #%00000000;$F0
+    .byte #%00000000;$F0
+    .byte #%10000000;$F0
+    .byte #%10000000;$F0
+    .byte #%11000000;$F0
+    .byte #%11000000;$F0
+    .byte #%11100000;$C6
+    .byte #%11100000;$C6
+    .byte #%11110000;$B4
+    .byte #%11110000;$B4
+    .byte #%11111000;$B8
+    .byte #%11111000;$B8
+    .byte #%11111100;$B4
+    .byte #%11111100;$B4
+    .byte #%11111110;$DE
+    .byte #%11111110;$DE
+    .byte #%11111111;--
+    .byte #%11111111;--
+Curve
+    .byte #%00000000;$F0
+    .byte #%00000000;$F0
+    .byte #%00000001;$F0
+    .byte #%00000001;$F0
+    .byte #%00000011;$F0
+    .byte #%00000011;$F0
+    .byte #%00000111;$C6
+    .byte #%00000111;$C6
+    .byte #%00001111;$B4
+    .byte #%00001111;$B4
+    .byte #%00001111;$B8
+    .byte #%00001111;$B8
+    .byte #%00001111;$B4
+    .byte #%00001111;$B4
+    .byte #%00001111;$DE
+    .byte #%00001111;$DE
+    .byte #%00001111;--
+    .byte #%00001111;--
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
